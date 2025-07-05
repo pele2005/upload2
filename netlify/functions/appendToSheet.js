@@ -4,19 +4,14 @@ const { google } = require('googleapis');
 // The ID of your Google Sheet.
 const SPREADSHEET_ID = '1iQ18yGtavcRAlD0Gu3Igr2qpCuFGT4dl4b32lWBTOdY';
 
-// The exact name of the sheet (tab) you want to write to.
-const SHEET_NAME = 'All expense';
+// =================================================================
+// !! สำคัญมาก !!
+// กรุณาเปลี่ยนค่า 'All expense' ให้เป็นชื่อของ "แท็บ" (Sheet Name)
+// ในไฟล์ Google Sheet ของคุณให้ถูกต้องทุกตัวอักษร
+// =================================================================
+const SHEET_NAME = 'allexpense';
 
 exports.handler = async function (event, context) {
-    // === DEBUGGING LOGS START ===
-    // These logs will help us verify the environment variables in Netlify.
-    console.log('[DEBUG] Function invoked.');
-    console.log(`[DEBUG] GOOGLE_SERVICE_ACCOUNT_EMAIL type: ${typeof process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL}`);
-    console.log(`[DEBUG] GOOGLE_SERVICE_ACCOUNT_EMAIL value (first 15 chars): ${String(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL).substring(0, 15)}`);
-    console.log(`[DEBUG] GOOGLE_PRIVATE_KEY type: ${typeof process.env.GOOGLE_PRIVATE_KEY}`);
-    console.log(`[DEBUG] GOOGLE_PRIVATE_KEY value (first 30 chars): ${String(process.env.GOOGLE_PRIVATE_KEY).substring(0, 30)}`);
-    // === DEBUGGING LOGS END ===
-
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
     }
@@ -44,6 +39,7 @@ exports.handler = async function (event, context) {
 
         const request = {
             spreadsheetId: SPREADSHEET_ID,
+            // The range uses the SHEET_NAME variable you set above.
             range: `'${SHEET_NAME}'!A1`,
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS',
