@@ -3,7 +3,7 @@ const uploaderSelect = document.getElementById('uploader');
 const fileInput = document.getElementById('file-upload');
 const uploadButton = document.getElementById('upload-button');
 const statusMessage = document.getElementById('status-message');
-const fileNameDisplay = document.getElementById('fileName-display');
+const fileNameDisplay = document.getElementById('file-name-display');
 const fileUploadUI = document.getElementById('file-upload-ui');
 const buttonText = document.getElementById('button-text');
 const buttonSpinner = document.getElementById('button-spinner');
@@ -12,16 +12,71 @@ const buttonSpinner = document.getElementById('button-spinner');
 let workbookData = null;
 let selectedFileName = '';
 
-// Event Listeners
+// === EVENT LISTENERS ===
+// Listen for file selection via the click-to-browse button
 fileInput.addEventListener('change', handleFileSelect);
+
+// Listen for drag and drop events on the upload UI
+fileUploadUI.addEventListener('dragenter', handleDragEnter, false);
+fileUploadUI.addEventListener('dragleave', handleDragLeave, false);
+fileUploadUI.addEventListener('dragover', handleDragOver, false);
+fileUploadUI.addEventListener('drop', handleDrop, false);
+
+// Listen for the main upload button click
 uploadButton.addEventListener('click', handleUpload);
 
+
+// === DRAG AND DROP HANDLERS ===
+function handleDragEnter(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fileUploadUI.classList.add('border-blue-500', 'bg-blue-50');
+}
+
+function handleDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fileUploadUI.classList.remove('border-blue-500', 'bg-blue-50');
+}
+
+function handleDragOver(e) {
+    // This is necessary to prevent the browser's default behavior
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fileUploadUI.classList.remove('border-blue-500', 'bg-blue-50');
+
+    // Get the files from the drop event
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files && files.length > 0) {
+        // Pass the first file to the main file processing function
+        processFile(files[0]);
+    }
+}
+
 /**
- * Handles the file selection event. Reads the file using SheetJS.
+ * Handles the file selection event from the hidden file input.
  * @param {Event} event - The file input change event.
  */
 function handleFileSelect(event) {
-    const file = event.target.files[0];
+    const files = event.target.files;
+    if (files && files.length > 0) {
+        processFile(files[0]);
+    }
+}
+
+/**
+ * Main function to process the selected file (from either drop or click).
+ * Reads the file using SheetJS.
+ * @param {File} file - The file object to process.
+ */
+function processFile(file) {
     if (!file) {
         return;
     }
@@ -37,6 +92,7 @@ function handleFileSelect(event) {
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             workbookData = workbook; // Store workbook for later processing
             console.log("File read successfully.");
+            showStatusMessage('อ่านไฟล์สำเร็จแล้ว กดปุ่มอัปโหลดได้เลย', 'success');
         } catch (error) {
             console.error("Error reading file:", error);
             showStatusMessage('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + error.message, 'error');
@@ -50,6 +106,7 @@ function handleFileSelect(event) {
     };
     reader.readAsArrayBuffer(file);
 }
+
 
 /**
  * Handles the upload button click. Processes and sends data.
@@ -252,7 +309,7 @@ function resetFileState() {
     workbookData = null;
     selectedFileName = '';
     fileNameDisplay.textContent = 'คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวาง';
-    fileUploadUI.classList.remove('border-green-500');
+    fileUploadUI.classList.remove('border-green-500', 'border-blue-500', 'bg-blue-50');
 }
 
 /**
@@ -262,7 +319,7 @@ function resetFileState() {
  */
 function showStatusMessage(message, type) {
     statusMessage.textContent = message;
-    statusMessage.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
+    statusMessage.className = 'text-center p-4 rounded-lg'; // Reset classes
 
     let typeClasses = '';
     switch (type) {
@@ -277,7 +334,6 @@ function showStatusMessage(message, type) {
             break;
     }
     statusMessage.classList.add(typeClasses);
-    statusMessage.classList.remove('hidden');
 }
 
 /**
