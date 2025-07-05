@@ -7,30 +7,6 @@ const SPREADSHEET_ID = '1iQ18yGtavcRAlD0Gu3Igr2qpCuFGT4dl4b32lWBTOdY';
 // The exact name of the sheet (tab) you want to write to.
 const SHEET_NAME = 'allexpense';
 
-/**
- * สร้าง Key ที่ไม่ซ้ำกันสำหรับแต่ละแถวเพื่อใช้ในการเปรียบเทียบ
- * @param {Array<string>} row - แถวข้อมูลจากชีต
- * @returns {string} - Key ที่ไม่ซ้ำกันสำหรับแถวนั้น
- */
-function createRowKey(row) {
-    // รวมข้อมูลจากคอลัมน์สำคัญเพื่อสร้าง Key
-    // คอลัมน์: 0:Date, 3:Team, 4:Cost_Center, 7:Account, 8:Hospital, 10:Doctor, 14:Request_Amount
-    if (!row || row.length < 15) {
-        return null; // ถ้าแถวข้อมูลไม่สมบูรณ์ ให้ข้ามไป
-    }
-    const keyParts = [
-        row[0],  // Date
-        row[3],  // Team
-        row[4],  // Cost_Center
-        row[7],  // Account
-        row[8],  // Hospital
-        row[10], // Doctor
-        row[14]  // Request_Amount
-    ];
-    return keyParts.join('|');
-}
-
-
 exports.handler = async function (event, context) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
@@ -38,8 +14,8 @@ exports.handler = async function (event, context) {
 
     const { rows: incomingRows } = JSON.parse(event.body);
 
-    if (!incomingRows || !Array.isArray(incomingRows) || incomingRows.length === 0) {
-        return { statusCode: 400, body: JSON.stringify({ message: 'Bad Request: Missing or empty "rows" data.' }) };
+    if (!incomingRows || !Array.isArray(incomingRows)) { // Allow empty incomingRows to clear the sheet
+        return { statusCode: 400, body: JSON.stringify({ message: 'Bad Request: Invalid "rows" data.' }) };
     }
 
     try {
@@ -57,66 +33,52 @@ exports.handler = async function (event, context) {
 
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // --- ขั้นตอนที่ 1: ดึงข้อมูลที่มีอยู่ทั้งหมดจาก Google Sheet ---
-        console.log('Fetching existing data from Google Sheet...');
-        const getRowsResponse = await sheets.spreadsheets.values.get({
+        // --- ขั้นตอนที่ 1: ล้างข้อมูลเก่าทั้งหมด (ยกเว้นหัวตาราง) ---
+        console.log('Clearing existing data from the sheet...');
+        await sheets.spreadsheets.values.clear({
             spreadsheetId: SPREADSHEET_ID,
-            range: `'${SHEET_NAME}'!A2:Z`, // อ่านตั้งแต่ A2 เพื่อข้ามหัวตาราง
+            range: `'${SHEET_NAME}'!A2:Z`, // ระบุช่วงที่จะล้างข้อมูล ตั้งแต่แถวที่ 2 ลงไป
         });
-        const existingRows = getRowsResponse.data.values || [];
-        
-        // --- ขั้นตอนที่ 2: สร้าง Set ของ Key ที่มีอยู่เพื่อการค้นหาที่รวดเร็ว ---
-        const existingKeys = new Set(existingRows.map(createRowKey).filter(key => key !== null));
-        console.log(`Found ${existingKeys.size} existing unique keys in the sheet.`);
+        console.log('Sheet cleared successfully.');
 
-        // --- ขั้นตอนที่ 3: กรองข้อมูลใหม่ที่ยังไม่มีในชีต ---
-        const newRowsToAppend = incomingRows.filter(row => {
-            const rowKey = createRowKey(row);
-            return rowKey && !existingKeys.has(rowKey);
-        });
-
-        console.log(`Received ${incomingRows.length} rows from upload, found ${newRowsToAppend.length} new rows to append.`);
-
-        // --- ขั้นตอนที่ 4: เพิ่มเฉพาะข้อมูลใหม่และอัปเดตวันที่ (ถ้ามี) ---
-        if (newRowsToAppend.length === 0) {
-            console.log('No new data to append.');
-            return {
-                statusCode: 200,
-                body: JSON.stringify({ message: 'ไม่พบข้อมูลใหม่ให้อัปเดต', updatedRows: 0 }),
+        // --- ขั้นตอนที่ 2: เขียนข้อมูลใหม่ทั้งหมดจากไฟล์ Excel ---
+        let updatedRowsCount = 0;
+        if (incomingRows.length > 0) {
+            console.log(`Writing ${incomingRows.length} new rows to the sheet...`);
+            const appendRequest = {
+                spreadsheetId: SPREADSHEET_ID,
+                range: `'${SHEET_NAME}'!A2`, // เริ่มเขียนข้อมูลที่แถว A2
+                valueInputOption: 'USER_ENTERED',
+                resource: { values: incomingRows },
             };
+            // ใช้ .update แทน .append เพื่อเขียนทับที่ตำแหน่งที่ระบุ
+            const appendResponse = await sheets.spreadsheets.values.update(appendRequest);
+            updatedRowsCount = appendResponse.data.updatedRows || 0;
+            console.log(`Successfully wrote ${updatedRowsCount} rows.`);
+        } else {
+            console.log('Uploaded file is empty. The sheet is now cleared.');
         }
 
-        // เพิ่มข้อมูลใหม่
-        const appendRequest = {
-            spreadsheetId: SPREADSHEET_ID,
-            range: `'${SHEET_NAME}'!A1`,
-            valueInputOption: 'USER_ENTERED',
-            insertDataOption: 'INSERT_ROWS',
-            resource: { values: newRowsToAppend },
-        };
-        const appendResponse = await sheets.spreadsheets.values.append(appendRequest);
-        const updatedRowsCount = appendResponse.data.updates.updatedRows || 0;
-        console.log(`Successfully appended ${updatedRowsCount} new rows.`);
 
-        // อัปเดตวันที่ในเซลล์ AB2
+        // --- ขั้นตอนที่ 3: อัปเดตวันที่ในเซลล์ AB2 ---
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const year = String(now.getFullYear()).slice(-2);
         const formattedDate = `${day}${month}${year}`;
 
-        const updateRequest = {
+        const updateTimestampRequest = {
             spreadsheetId: SPREADSHEET_ID,
             range: `'${SHEET_NAME}'!AB2`,
             valueInputOption: 'USER_ENTERED',
             resource: { values: [[formattedDate]] },
         };
-        await sheets.spreadsheets.values.update(updateRequest);
+        await sheets.spreadsheets.values.update(updateTimestampRequest);
         console.log(`Successfully updated cell AB2 with timestamp ${formattedDate}.`);
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: `อัปเดตข้อมูลสำเร็จ! เพิ่มข้อมูลใหม่ ${updatedRowsCount} แถว`, updatedRows: updatedRowsCount }),
+            body: JSON.stringify({ message: `อัปโหลดข้อมูลทับของเดิมสำเร็จ! เขียนข้อมูลใหม่ ${updatedRowsCount} แถว`, updatedRows: updatedRowsCount }),
         };
 
     } catch (err) {
