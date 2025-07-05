@@ -1,0 +1,8 @@
+{
+  "name": "netlify-google-sheets-uploader",
+  "version": "1.0.0",
+  "description": "Uploads data to Google Sheets via a Netlify function.",
+  "dependencies": {
+    "googleapis": "^100.0.0"
+  }
+}

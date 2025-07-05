@@ -1,0 +1,16 @@
+# Netlify configuration file
+
+[build]
+  # This command is optional if you don't have a build step for your static files
+  # command = "echo 'No build command'"
+  
+  # Directory with the serverless functions
+  functions = "netlify/functions"
+  
+  # The directory to publish (your static site files)
+  publish = "/"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
