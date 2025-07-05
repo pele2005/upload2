@@ -13,16 +13,11 @@ let workbookData = null;
 let selectedFileName = '';
 
 // === EVENT LISTENERS ===
-// Listen for file selection via the click-to-browse button
 fileInput.addEventListener('change', handleFileSelect);
-
-// Listen for drag and drop events on the upload UI
 fileUploadUI.addEventListener('dragenter', handleDragEnter, false);
 fileUploadUI.addEventListener('dragleave', handleDragLeave, false);
 fileUploadUI.addEventListener('dragover', handleDragOver, false);
 fileUploadUI.addEventListener('drop', handleDrop, false);
-
-// Listen for the main upload button click
 uploadButton.addEventListener('click', handleUpload);
 
 
@@ -40,7 +35,6 @@ function handleDragLeave(e) {
 }
 
 function handleDragOver(e) {
-    // This is necessary to prevent the browser's default behavior
     e.preventDefault();
     e.stopPropagation();
 }
@@ -49,21 +43,13 @@ function handleDrop(e) {
     e.preventDefault();
     e.stopPropagation();
     fileUploadUI.classList.remove('border-blue-500', 'bg-blue-50');
-
-    // Get the files from the drop event
     const dt = e.dataTransfer;
     const files = dt.files;
-
     if (files && files.length > 0) {
-        // Pass the first file to the main file processing function
         processFile(files[0]);
     }
 }
 
-/**
- * Handles the file selection event from the hidden file input.
- * @param {Event} event - The file input change event.
- */
 function handleFileSelect(event) {
     const files = event.target.files;
     if (files && files.length > 0) {
@@ -71,26 +57,17 @@ function handleFileSelect(event) {
     }
 }
 
-/**
- * Main function to process the selected file (from either drop or click).
- * Reads the file using SheetJS.
- * @param {File} file - The file object to process.
- */
 function processFile(file) {
-    if (!file) {
-        return;
-    }
-
+    if (!file) return;
     selectedFileName = file.name;
     fileNameDisplay.textContent = `ไฟล์ที่เลือก: ${selectedFileName}`;
     fileUploadUI.classList.add('border-green-500');
-
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-            workbookData = workbook; // Store workbook for later processing
+            workbookData = workbook;
             console.log("File read successfully.");
             showStatusMessage('อ่านไฟล์สำเร็จแล้ว กดปุ่มอัปโหลดได้เลย', 'success');
         } catch (error) {
@@ -107,44 +84,30 @@ function processFile(file) {
     reader.readAsArrayBuffer(file);
 }
 
-
-/**
- * Handles the upload button click. Processes and sends data.
- */
 async function handleUpload() {
     if (!workbookData) {
         showStatusMessage('กรุณาเลือกไฟล์ Excel ก่อนครับ', 'warning');
         return;
     }
-
     setLoadingState(true);
-
     try {
         const processedData = processWorkbook(workbookData);
-        if (!processedData || processedData.length === 0) {
+        if (!processedData) { // Can be an empty array if file is empty
             throw new Error("ไม่พบข้อมูลในแท็บ 'Data' หรือไฟล์มีรูปแบบไม่ถูกต้อง");
         }
         
         console.log(`Processed ${processedData.length} rows. Sending to server...`);
-
-        // Send data to the Netlify serverless function
         const response = await fetch('/.netlify/functions/appendToSheet', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rows: processedData }),
         });
-
         const result = await response.json();
-
         if (!response.ok) {
             throw new Error(result.message || `Server error: ${response.statusText}`);
         }
-        
-        showStatusMessage(`อัปโหลดข้อมูลสำเร็จ! เพิ่มข้อมูล ${result.updatedRows} แถวเรียบร้อยแล้ว`, 'success');
+        showStatusMessage(result.message, 'success');
         resetFileState();
-
     } catch (error) {
         console.error("Upload failed:", error);
         showStatusMessage(`อัปโหลดล้มเหลว: ${error.message}`, 'error');
@@ -153,28 +116,15 @@ async function handleUpload() {
     }
 }
 
-/**
- * Processes the workbook to extract, map, and format data.
- * @param {Object} workbook - The workbook object from SheetJS.
- * @returns {Array<Array<string>>} - An array of rows ready for Google Sheets.
- */
 function processWorkbook(workbook) {
-    const sheetName = "Data"; // Target sheet name
+    const sheetName = "Data";
     const worksheet = workbook.Sheets[sheetName];
-    if (!worksheet) {
-        return null;
-    }
+    if (!worksheet) return null;
 
-    // Convert sheet to array of arrays (more robust for header mapping)
     const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+    if (data.length < 2) return [];
 
-    if (data.length < 2) {
-        return []; // No data rows
-    }
-
-    const headers = data.shift().map(h => String(h).trim()); // Get and clean headers
-    
-    // Find indices of columns, handling duplicates
+    const headers = data.shift().map(h => String(h).trim());
     const headerMap = {
         date: headers.indexOf("Date"),
         month: headers.indexOf("Month"),
@@ -196,7 +146,6 @@ function processWorkbook(workbook) {
         clearingAmount: headers.indexOf("Clearing Amount"),
         plan: headers.indexOf("Plan"),
         createdAt: headers.indexOf("Created At"),
-        // Handle duplicate columns
         updatedBy1: headers.indexOf("Updated By"),
         updatedAt1: headers.indexOf("Updated At"),
         updatedBy2: headers.indexOf("Updated By", headers.indexOf("Updated By") + 1),
@@ -204,146 +153,124 @@ function processWorkbook(workbook) {
     };
 
     const uploaderName = uploaderSelect.value;
-    const uploadTimestamp = new Date().toLocaleString('en-GB'); // DD/MM/YYYY, HH:MM:SS
+    const uploadTimestamp = new Date().toLocaleString('en-GB');
 
     return data.map(row => {
-        // Skip empty rows
-        if (row.every(cell => cell === "")) {
-            return null;
-        }
+        if (row.every(cell => cell === "")) return null;
 
         const dateRaw = row[headerMap.date];
         const clearingDateRaw = row[headerMap.clearingDate];
         const createdAtRaw = row[headerMap.createdAt];
+        const updatedAt1Raw = headerMap.updatedAt1 !== -1 ? row[headerMap.updatedAt1] : "";
+        const updatedAt2Raw = headerMap.updatedAt2 !== -1 ? row[headerMap.updatedAt2] : "";
 
-        // Format dates
+        // Format dates according to target specification
         const formattedDate = formatDate(dateRaw, 'MMDDYYYY');
         const formattedClearingDate = formatDate(clearingDateRaw, 'DDMMYYYY');
         const formattedCreatedAt = formatDate(createdAtRaw, 'MMDDYYYY');
+        const formattedUpdatedAt1 = formatDate(updatedAt1Raw, 'DDMMYYYY');
+        const formattedUpdatedAt2 = formatDate(updatedAt2Raw, 'DDMMYYYY');
 
-        // Target Google Sheet Column Order:
         return [
-            formattedDate, // Date (MMDDYYYY)
-            row[headerMap.month], // Month
-            row[headerMap.year], // Year
-            row[headerMap.team], // Team
-            row[headerMap.costCenter], // Cost_Center
-            row[headerMap.type], // Type
-            row[headerMap.accountGroup], // Account_Group
-            row[headerMap.account], // Account
-            row[headerMap.hospital], // Hospital
-            "", // Hospital_Remark (leave blank)
-            row[headerMap.doctor], // Doctor
-            row[headerMap.event], // Event
-            "", // Description (leave blank)
-            row[headerMap.request], // Request
-            row[headerMap.requestAmount], // Request_Amount
-            row[headerMap.payby], // Payby
-            row[headerMap.payee], // Payee
-            row[headerMap.status], // Status
-            formattedClearingDate, // Clearing_Date (DDMMYYYY)
-            row[headerMap.clearingAmount], // Clearing_Amount
-            row[headerMap.plan], // Plan
-            uploaderName, // Created_By (from dropdown)
-            formattedCreatedAt, // Created_At (MMDDYYYY)
-            headerMap.updatedBy1 !== -1 ? row[headerMap.updatedBy1] : "", // Updated_By
-            headerMap.updatedAt1 !== -1 ? formatDate(row[headerMap.updatedAt1], 'DDMMYYYY') : "", // Update_At
-            headerMap.updatedBy2 !== -1 ? row[headerMap.updatedBy2] : "", // Updated_By_2
-            headerMap.updatedAt2 !== -1 ? formatDate(row[headerMap.updatedAt2], 'DDMMYYYY') : "", // Updated_At_2
-            uploadTimestamp, // Updated_date
+            formattedDate, row[headerMap.month], row[headerMap.year], row[headerMap.team],
+            row[headerMap.costCenter], row[headerMap.type], row[headerMap.accountGroup],
+            row[headerMap.account], row[headerMap.hospital], "", row[headerMap.doctor],
+            row[headerMap.event], "", row[headerMap.request], row[headerMap.requestAmount],
+            row[headerMap.payby], row[headerMap.payee], row[headerMap.status],
+            formattedClearingDate, row[headerMap.clearingAmount], row[headerMap.plan],
+            uploaderName, formattedCreatedAt,
+            headerMap.updatedBy1 !== -1 ? row[headerMap.updatedBy1] : "", formattedUpdatedAt1,
+            headerMap.updatedBy2 !== -1 ? row[headerMap.updatedBy2] : "", formattedUpdatedAt2,
+            uploadTimestamp,
         ];
-    }).filter(row => row !== null); // Remove empty rows
+    }).filter(row => row !== null);
 }
 
 /**
- * Formats a date string from DDMMYY to the target format.
- * Handles various input types from SheetJS.
- * @param {string|number|Date} rawValue - The raw cell value.
+ * Formats a date value from various possible Excel inputs into the target format.
+ * @param {string|number|Date} rawValue - The raw cell value from SheetJS.
  * @param {'MMDDYYYY'|'DDMMYYYY'} targetFormat - The desired output format.
- * @returns {string} The formatted date string.
+ * @returns {string} The formatted date string, or an empty string if input is invalid.
  */
 function formatDate(rawValue, targetFormat) {
     if (!rawValue) return "";
 
-    let dateStr = String(rawValue);
-    
-    // If it's a date object from SheetJS
-    if (rawValue instanceof Date) {
-        const day = String(rawValue.getDate()).padStart(2, '0');
-        const month = String(rawValue.getMonth() + 1).padStart(2, '0');
-        const year = rawValue.getFullYear();
-        if (targetFormat === 'MMDDYYYY') return `${month}${day}${year}`;
-        if (targetFormat === 'DDMMYYYY') return `${day}${month}${year}`;
+    let dateObj;
+
+    // 1. If it's a valid Date object already (from cellDates: true)
+    if (rawValue instanceof Date && !isNaN(rawValue)) {
+        dateObj = rawValue;
+    }
+    // 2. If it's an Excel serial number
+    else if (typeof rawValue === 'number' && rawValue > 1) {
+        // The Excel epoch starts on 1900-01-01. JS epoch is 1970-01-01.
+        // The conversion is (excelDate - 25569) * 86400 * 1000.
+        // We add a timezone offset to ensure it's parsed as local date.
+        const date = new Date((rawValue - 25569) * 86400000);
+        const tzOffset = date.getTimezoneOffset() * 60000;
+        dateObj = new Date(date.getTime() + tzOffset);
+    }
+    // 3. If it's a string, try to parse it (assuming DD/MM/YY or similar)
+    else if (typeof rawValue === 'string') {
+        const parts = rawValue.trim().split(/[\/\-\.]/); // Split by /, -, or .
+        if (parts.length === 3) {
+            let day = parts[0];
+            let month = parts[1];
+            let year = parts[2];
+
+            // Handle 2-digit year
+            if (year.length === 2) {
+                year = '20' + year;
+            }
+            
+            // Create a date object. Month is 0-indexed in JS.
+            // Use YYYY-MM-DD format for constructor to avoid timezone issues.
+            dateObj = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
+        }
     }
 
-    // Handle Excel's numeric date format
-    if (typeof rawValue === 'number' && rawValue > 10000) {
-       const dateObj = XLSX.SSF.parse_date_code(rawValue);
-       const day = String(dateObj.d).padStart(2, '0');
-       const month = String(dateObj.m).padStart(2, '0');
-       const year = dateObj.y;
-       if (targetFormat === 'MMDDYYYY') return `${month}${day}${year}`;
-       if (targetFormat === 'DDMMYYYY') return `${day}${month}${year}`;
+    // If we successfully created a valid date object, format it.
+    if (dateObj instanceof Date && !isNaN(dateObj)) {
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const year = dateObj.getFullYear();
+
+        if (targetFormat === 'MMDDYYYY') {
+            return `${month}${day}${year}`;
+        }
+        if (targetFormat === 'DDMMYYYY') {
+            return `${day}${month}${year}`;
+        }
     }
-    
-    // Handle DDMMYY string format
-    dateStr = dateStr.replace(/[^0-9]/g, ''); // Clean non-numeric chars
-    if (dateStr.length !== 6) return dateStr; // Return original if not in expected format
 
-    const day = dateStr.substring(0, 2);
-    const month = dateStr.substring(2, 4);
-    const year = '20' + dateStr.substring(4, 6);
-
-    if (targetFormat === 'MMDDYYYY') return `${month}${day}${year}`;
-    if (targetFormat === 'DDMMYYYY') return `${day}${month}${year}`;
-    
-    return dateStr; // Fallback
+    // Fallback: if all parsing fails, return an empty string to avoid writing bad data.
+    console.warn(`Could not parse date: ${rawValue}`);
+    return "";
 }
 
 
-/**
- * Resets the file input and related UI elements.
- */
 function resetFileState() {
-    fileInput.value = ''; // Clear the file input
+    fileInput.value = '';
     workbookData = null;
     selectedFileName = '';
     fileNameDisplay.textContent = 'คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวาง';
     fileUploadUI.classList.remove('border-green-500', 'border-blue-500', 'bg-blue-50');
 }
 
-/**
- * Shows a status message to the user.
- * @param {string} message - The message to display.
- * @param {'success'|'error'|'warning'} type - The type of message.
- */
 function showStatusMessage(message, type) {
     statusMessage.textContent = message;
-    statusMessage.className = 'text-center p-4 rounded-lg'; // Reset classes to a base state
-
+    statusMessage.className = 'text-center p-4 rounded-lg';
     let typeClasses = '';
     switch (type) {
-        case 'success':
-            typeClasses = 'bg-green-100 text-green-800';
-            break;
-        case 'error':
-            typeClasses = 'bg-red-100 text-red-800';
-            break;
-        case 'warning':
-            typeClasses = 'bg-yellow-100 text-yellow-800';
-            break;
+        case 'success': typeClasses = 'bg-green-100 text-green-800'; break;
+        case 'error': typeClasses = 'bg-red-100 text-red-800'; break;
+        case 'warning': typeClasses = 'bg-yellow-100 text-yellow-800'; break;
     }
-    
-    // Correctly add multiple classes by splitting the string and using the spread operator.
     if (typeClasses) {
         statusMessage.classList.add(...typeClasses.split(' '));
     }
 }
 
-/**
- * Toggles the loading state of the upload button.
- * @param {boolean} isLoading - Whether to show the loading state.
- */
 function setLoadingState(isLoading) {
     uploadButton.disabled = isLoading;
     if (isLoading) {
