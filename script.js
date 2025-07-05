@@ -319,7 +319,7 @@ function resetFileState() {
  */
 function showStatusMessage(message, type) {
     statusMessage.textContent = message;
-    statusMessage.className = 'text-center p-4 rounded-lg'; // Reset classes
+    statusMessage.className = 'text-center p-4 rounded-lg'; // Reset classes to a base state
 
     let typeClasses = '';
     switch (type) {
@@ -333,7 +333,11 @@ function showStatusMessage(message, type) {
             typeClasses = 'bg-yellow-100 text-yellow-800';
             break;
     }
-    statusMessage.classList.add(typeClasses);
+    
+    // Correctly add multiple classes by splitting the string and using the spread operator.
+    if (typeClasses) {
+        statusMessage.classList.add(...typeClasses.split(' '));
+    }
 }
 
 /**
