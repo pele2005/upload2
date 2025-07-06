@@ -153,7 +153,6 @@ function processWorkbook(workbook) {
     };
 
     const uploaderName = uploaderSelect.value;
-    const uploadTimestamp = new Date().toLocaleString('en-GB');
 
     return data.map(row => {
         if (row.every(cell => cell === "")) return null;
@@ -165,23 +164,41 @@ function processWorkbook(workbook) {
         const updatedAt2Raw = headerMap.updatedAt2 !== -1 ? row[headerMap.updatedAt2] : "";
 
         // Format dates according to target specification
-        const formattedDate = formatDate(dateRaw, 'MMDDYYYY');
-        const formattedClearingDate = formatDate(clearingDateRaw, 'DDMMYYYY');
-        const formattedCreatedAt = formatDate(createdAtRaw, 'MMDDYYYY');
-        const formattedUpdatedAt1 = formatDate(updatedAt1Raw, 'DDMMYYYY');
-        const formattedUpdatedAt2 = formatDate(updatedAt2Raw, 'DDMMYYYY');
+        const formattedDate = formatDate(dateRaw, 'MM/DD/YYYY');
+        const formattedClearingDate = formatDate(clearingDateRaw, 'DD/MM/YYYY');
+        const formattedCreatedAt = formatDate(createdAtRaw, 'MM/DD/YYYY');
+        const formattedUpdatedAt1 = formatDate(updatedAt1Raw, 'DD/MM/YYYY');
+        const formattedUpdatedAt2 = formatDate(updatedAt2Raw, 'DD/MM/YYYY');
 
         return [
-            formattedDate, row[headerMap.month], row[headerMap.year], row[headerMap.team],
-            row[headerMap.costCenter], row[headerMap.type], row[headerMap.accountGroup],
-            row[headerMap.account], row[headerMap.hospital], "", row[headerMap.doctor],
-            row[headerMap.event], "", row[headerMap.request], row[headerMap.requestAmount],
-            row[headerMap.payby], row[headerMap.payee], row[headerMap.status],
-            formattedClearingDate, row[headerMap.clearingAmount], row[headerMap.plan],
-            uploaderName, formattedCreatedAt,
-            headerMap.updatedBy1 !== -1 ? row[headerMap.updatedBy1] : "", formattedUpdatedAt1,
-            headerMap.updatedBy2 !== -1 ? row[headerMap.updatedBy2] : "", formattedUpdatedAt2,
-            uploadTimestamp,
+            formattedDate, // A
+            row[headerMap.month], // B
+            row[headerMap.year], // C
+            row[headerMap.team], // D
+            row[headerMap.costCenter], // E
+            row[headerMap.type], // F
+            row[headerMap.accountGroup], // G
+            row[headerMap.account], // H
+            row[headerMap.hospital], // I
+            "", // J: Hospital_Remark
+            row[headerMap.doctor], // K
+            row[headerMap.event], // L
+            "", // M: Description
+            row[headerMap.request], // N
+            row[headerMap.requestAmount], // O
+            row[headerMap.payby], // P
+            row[headerMap.payee], // Q
+            row[headerMap.status], // R
+            formattedClearingDate, // S
+            row[headerMap.clearingAmount], // T
+            row[headerMap.plan], // U
+            uploaderName, // V: Created_By
+            formattedCreatedAt, // W
+            headerMap.updatedBy1 !== -1 ? row[headerMap.updatedBy1] : "", // X
+            formattedUpdatedAt1, // Y
+            headerMap.updatedBy2 !== -1 ? row[headerMap.updatedBy2] : "", // Z
+            formattedUpdatedAt2, // AA
+            "", // AB: Updated_date - ปล่อยให้ว่างเพื่อให้ Server จัดการ
         ];
     }).filter(row => row !== null);
 }
@@ -189,7 +206,7 @@ function processWorkbook(workbook) {
 /**
  * Formats a date value from various possible Excel inputs into the target format.
  * @param {string|number|Date} rawValue - The raw cell value from SheetJS.
- * @param {'MMDDYYYY'|'DDMMYYYY'} targetFormat - The desired output format.
+ * @param {'MM/DD/YYYY'|'DD/MM/YYYY'} targetFormat - The desired output format with slashes.
  * @returns {string} The formatted date string, or an empty string if input is invalid.
  */
 function formatDate(rawValue, targetFormat) {
@@ -197,53 +214,38 @@ function formatDate(rawValue, targetFormat) {
 
     let dateObj;
 
-    // 1. If it's a valid Date object already (from cellDates: true)
     if (rawValue instanceof Date && !isNaN(rawValue)) {
         dateObj = rawValue;
     }
-    // 2. If it's an Excel serial number
     else if (typeof rawValue === 'number' && rawValue > 1) {
-        // The Excel epoch starts on 1900-01-01. JS epoch is 1970-01-01.
-        // The conversion is (excelDate - 25569) * 86400 * 1000.
-        // We add a timezone offset to ensure it's parsed as local date.
         const date = new Date((rawValue - 25569) * 86400000);
         const tzOffset = date.getTimezoneOffset() * 60000;
         dateObj = new Date(date.getTime() + tzOffset);
     }
-    // 3. If it's a string, try to parse it (assuming DD/MM/YY or similar)
     else if (typeof rawValue === 'string') {
-        const parts = rawValue.trim().split(/[\/\-\.]/); // Split by /, -, or .
+        const parts = rawValue.trim().split(/[\/\-\.]/);
         if (parts.length === 3) {
             let day = parts[0];
             let month = parts[1];
             let year = parts[2];
-
-            // Handle 2-digit year
-            if (year.length === 2) {
-                year = '20' + year;
-            }
-            
-            // Create a date object. Month is 0-indexed in JS.
-            // Use YYYY-MM-DD format for constructor to avoid timezone issues.
+            if (year.length === 2) year = '20' + year;
             dateObj = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
         }
     }
 
-    // If we successfully created a valid date object, format it.
     if (dateObj instanceof Date && !isNaN(dateObj)) {
         const day = String(dateObj.getDate()).padStart(2, '0');
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const year = dateObj.getFullYear();
 
-        if (targetFormat === 'MMDDYYYY') {
-            return `${month}${day}${year}`;
+        if (targetFormat === 'MM/DD/YYYY') {
+            return `${month}/${day}/${year}`;
         }
-        if (targetFormat === 'DDMMYYYY') {
-            return `${day}${month}${year}`;
+        if (targetFormat === 'DD/MM/YYYY') {
+            return `${day}/${month}/${year}`;
         }
     }
 
-    // Fallback: if all parsing fails, return an empty string to avoid writing bad data.
     console.warn(`Could not parse date: ${rawValue}`);
     return "";
 }
