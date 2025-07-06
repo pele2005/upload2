@@ -14,7 +14,8 @@ exports.handler = async function (event, context) {
 
     const { rows: incomingRows } = JSON.parse(event.body);
 
-    if (!incomingRows || !Array.isArray(incomingRows)) { // Allow empty incomingRows to clear the sheet
+    // Allow an empty array, which means the user wants to clear the sheet.
+    if (!incomingRows || !Array.isArray(incomingRows)) {
         return { statusCode: 400, body: JSON.stringify({ message: 'Bad Request: Invalid "rows" data.' }) };
     }
 
@@ -37,23 +38,23 @@ exports.handler = async function (event, context) {
         console.log('Clearing existing data from the sheet...');
         await sheets.spreadsheets.values.clear({
             spreadsheetId: SPREADSHEET_ID,
-            range: `'${SHEET_NAME}'!A2:Z`, // ระบุช่วงที่จะล้างข้อมูล ตั้งแต่แถวที่ 2 ลงไป
+            range: `'${SHEET_NAME}'!A2:AC`, // ระบุช่วงที่จะล้างข้อมูลให้ครอบคลุมทั้งหมด
         });
         console.log('Sheet cleared successfully.');
 
-        // --- ขั้นตอนที่ 2: เขียนข้อมูลใหม่ทั้งหมดจากไฟล์ Excel ---
+        // --- ขั้นตอนที่ 2: เขียนข้อมูลใหม่ทั้งหมดจากไฟล์ Excel (ถ้ามี) ---
         let updatedRowsCount = 0;
         if (incomingRows.length > 0) {
             console.log(`Writing ${incomingRows.length} new rows to the sheet...`);
-            const appendRequest = {
+            const writeRequest = {
                 spreadsheetId: SPREADSHEET_ID,
                 range: `'${SHEET_NAME}'!A2`, // เริ่มเขียนข้อมูลที่แถว A2
-                valueInputOption: 'USER_ENTERED',
+                valueInputOption: 'USER_ENTERED', // สำคัญ: เพื่อให้ Google Sheets ตีความ format วันที่และตัวเลขถูกต้อง
                 resource: { values: incomingRows },
             };
-            // ใช้ .update แทน .append เพื่อเขียนทับที่ตำแหน่งที่ระบุ
-            const appendResponse = await sheets.spreadsheets.values.update(appendRequest);
-            updatedRowsCount = appendResponse.data.updatedRows || 0;
+            // ใช้ .update เพื่อเขียนทับที่ตำแหน่งที่ระบุ
+            const writeResponse = await sheets.spreadsheets.values.update(writeRequest);
+            updatedRowsCount = writeResponse.data.updatedRows || 0;
             console.log(`Successfully wrote ${updatedRowsCount} rows.`);
         } else {
             console.log('Uploaded file is empty. The sheet is now cleared.');
