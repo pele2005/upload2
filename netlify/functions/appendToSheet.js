@@ -49,7 +49,8 @@ exports.handler = async function (event, context) {
             const writeRequest = {
                 spreadsheetId: SPREADSHEET_ID,
                 range: `'${SHEET_NAME}'!A2`, // เริ่มเขียนข้อมูลที่แถว A2
-                valueInputOption: 'USER_ENTERED', // สำคัญ: เพื่อให้ Google Sheets ตีความ format วันที่และตัวเลขถูกต้อง
+                // !! แก้ไขสำคัญ: ใช้ RAW เพื่อป้องกัน Google Sheets แปลง format อัตโนมัติ !!
+                valueInputOption: 'RAW',
                 resource: { values: incomingRows },
             };
             // ใช้ .update เพื่อเขียนทับที่ตำแหน่งที่ระบุ
@@ -71,7 +72,8 @@ exports.handler = async function (event, context) {
         const updateTimestampRequest = {
             spreadsheetId: SPREADSHEET_ID,
             range: `'${SHEET_NAME}'!AB2`,
-            valueInputOption: 'USER_ENTERED',
+            // ใช้ RAW ที่นี่ด้วยเพื่อความสอดคล้องกัน
+            valueInputOption: 'RAW',
             resource: { values: [[formattedDate]] },
         };
         await sheets.spreadsheets.values.update(updateTimestampRequest);
