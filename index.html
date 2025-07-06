@@ -17,7 +17,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-100 py-12 px-4">
 
     <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8 space-y-6">
         
@@ -72,6 +72,14 @@
         <!-- Status Message -->
         <div id="status-message" class="text-center p-4 rounded-lg hidden"></div>
 
+    </div>
+
+    <!-- Log Display Section -->
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8 space-y-4 mt-8">
+        <h2 class="text-xl font-bold text-gray-800 border-b pb-3">ประวัติการอัปโหลดล่าสุด</h2>
+        <div id="log-container" class="mt-4">
+            <p id="log-status" class="text-gray-500 text-center py-4">กำลังโหลดประวัติ...</p>
+        </div>
     </div>
 
     <!-- Link to the JavaScript file -->
