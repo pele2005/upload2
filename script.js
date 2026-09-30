@@ -67,7 +67,7 @@ function processFile(file) {
     reader.onload = function(e) {
         try {
             const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const workbook = XLSX.read(data, { type: 'array' }); // no cellDates: SheetJS dates shift a day in UTC+7; formatDate() handles serial numbers correctly
             workbookData = workbook;
             console.log("File read successfully.");
             showStatusMessage('อ่านไฟล์สำเร็จแล้ว กดปุ่มอัปโหลดได้เลย', 'success');
